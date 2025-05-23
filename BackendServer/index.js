@@ -16,7 +16,15 @@ const JWT_EXPIRES_IN = 5 * 60; // 5 minutes (in seconds)
 
 app.use(
   cors({
-    origin: ["https://localhost:8081", "http://localhost:8081"], // <-- Use your frontend's HTTPS URL/port
+    origin: [
+      "https://localhost:9443",
+      "https://localhost:4000",
+      "http://localhost:19006",
+      "http://localhost:8081",
+      "http://localhost:4000",
+      "http://192.168.29.102:4000",
+      "http://192.168.29.102:8081",
+    ],
     credentials: true,
   })
 );
