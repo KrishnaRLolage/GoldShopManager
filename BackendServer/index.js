@@ -284,6 +284,36 @@ app.get("/api/inventory-names", (req, res) => {
   );
 });
 
+// Update inventory quantity for an item with same name and weight per piece
+app.post("/api/inventory/update-quantity", (req, res) => {
+  const { ItemName, WeightPerPiece, QuantityToAdd } = req.body;
+  if (
+    !ItemName ||
+    typeof WeightPerPiece !== "number" ||
+    typeof QuantityToAdd !== "number"
+  ) {
+    return res.status(400).json({ error: "Missing or invalid fields" });
+  }
+  db.get(
+    "SELECT * FROM inventory WHERE ItemName = ? AND WeightPerPiece = ?",
+    [ItemName, WeightPerPiece],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(404).json({ error: "Item not found" });
+      const newQty = row.Quantity + QuantityToAdd;
+      const newTotalWeight = newQty * WeightPerPiece;
+      db.run(
+        "UPDATE inventory SET Quantity = ?, TotalWeight = ? WHERE id = ?",
+        [newQty, newTotalWeight, row.id],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ success: true, id: row.id, newQty, newTotalWeight });
+        }
+      );
+    }
+  );
+});
+
 // Invoice creation endpoint
 app.post("/api/invoices", (req, res) => {
   const { customer_id, date, total, items } = req.body;

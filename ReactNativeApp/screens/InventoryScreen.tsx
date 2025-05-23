@@ -4,7 +4,7 @@ import { Text, Button, Avatar } from 'react-native-paper';
 import { useState, useEffect } from 'react';
 import { DataTable, TextInput, IconButton } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { apiGetInventory, apiAddInventory, apiDeleteInventory, apiGetInventoryNames } from '../db';
+import { apiGetInventory, apiAddInventory, apiDeleteInventory, apiGetInventoryNames, apiUpdateInventoryQuantity } from '../db';
 import WebNavBanner from '../components/WebNavBanner';
 import { withAuthGuard } from '../withAuthGuard';
 
@@ -110,16 +110,32 @@ export default withAuthGuard(function InventoryScreen(props: any) {
     setTimeout(async () => {
       const newItem = { ...addItem };
       try {
-        await apiAddInventory({
-          ItemName: newItem.ItemName,
-          Description: newItem.Description,
-          Quantity: newItem.Quantity ? parseInt(newItem.Quantity) : 0,
-          WeightPerPiece: newItem.WeightPerPiece ? parseFloat(newItem.WeightPerPiece) : 0
-        });
+        // Check if item with same name and weight per piece exists
+        const all = await apiGetInventory();
+        const match = all.find((inv: any) =>
+          (inv.ItemName || '').trim().toLowerCase() === newItem.ItemName.trim().toLowerCase() &&
+          parseFloat(inv.WeightPerPiece) === parseFloat(newItem.WeightPerPiece)
+        );
+        if (match) {
+          // Update quantity
+          await apiUpdateInventoryQuantity({
+            ItemName: newItem.ItemName,
+            WeightPerPiece: parseFloat(newItem.WeightPerPiece),
+            QuantityToAdd: newItem.Quantity ? parseInt(newItem.Quantity) : 0
+          });
+        } else {
+          // Add new entry
+          await apiAddInventory({
+            ItemName: newItem.ItemName,
+            Description: newItem.Description,
+            Quantity: newItem.Quantity ? parseInt(newItem.Quantity) : 0,
+            WeightPerPiece: newItem.WeightPerPiece ? parseFloat(newItem.WeightPerPiece) : 0
+          });
+        }
         setAddItem({ ItemName: '', Description: '', Quantity: '', WeightPerPiece: '', TotalWeight: '' });
         await loadInventory();
       } catch (e) {
-        console.error('Failed to add inventory item:', e);
+        console.error('Failed to add or update inventory item:', e);
       }
     }, 0);
   };
@@ -168,7 +184,7 @@ export default withAuthGuard(function InventoryScreen(props: any) {
         )}
       </View>
       {/* Editable Table: Only one row for adding inventory */}
-      <DataTable style={{ width: '100%' }}>
+      <DataTable style={{ width: '100%', zIndex: 1 }}>
         <DataTable.Header style={{ backgroundColor: '#222831' }}>
           <DataTable.Title style={{ flex: 2 }} textStyle={{ color: '#fff', fontWeight: 'bold' }}>Item Name</DataTable.Title>
           <DataTable.Title style={{ flex: 2 }} textStyle={{ color: '#fff', fontWeight: 'bold' }}>Description</DataTable.Title>
@@ -178,8 +194,8 @@ export default withAuthGuard(function InventoryScreen(props: any) {
           <DataTable.Title style={{ flex: 0.7 }} textStyle={{ color: '#fff', fontWeight: 'bold' }}>Action</DataTable.Title>
         </DataTable.Header>
         <DataTable.Row style={{ backgroundColor: '#f0f4f8' }}>
-          <DataTable.Cell style={{ flex: 2 }} textStyle={{ color: '#222831', fontWeight: '600' }}>
-            <View style={{ flex: 1 }}>
+          <DataTable.Cell style={{ flex: 2, position: 'relative', zIndex: 200 }} textStyle={{ color: '#222831', fontWeight: '600' }}>
+            <View style={{ flex: 1, position: 'relative' }}>
               <TextInput
                 value={addItem.ItemName}
                 onChangeText={text => {
@@ -196,7 +212,24 @@ export default withAuthGuard(function InventoryScreen(props: any) {
                 autoCapitalize="words"
               />
               {showNameDropdown && nameSuggestions.length > 0 && (
-                <View style={{ position: 'absolute', top: 44, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#7c3aed', borderRadius: 6, zIndex: 10, maxHeight: 150 }}>
+                <View style={{
+                  position: 'absolute',
+                  top: 44,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#fff',
+                  borderWidth: 1,
+                  borderColor: '#7c3aed',
+                  borderRadius: 6,
+                  zIndex: 9999,
+                  maxHeight: 150,
+                  overflow: 'scroll', // Use 'scroll' for RN web compatibility
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.18,
+                  shadowRadius: 8,
+                  elevation: 10,
+                }}>
                   <FlatList
                     data={nameSuggestions}
                     keyExtractor={item => item}

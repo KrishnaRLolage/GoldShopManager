@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Modal, Platform, Linking } from 'react-native';
-import { Text, Button, Avatar, TextInput, DataTable, Divider, Card } from 'react-native-paper';
+import { Text, Button, Avatar, TextInput, DataTable, Divider, Card, Portal } from 'react-native-paper';
 import PJDiamondIcon from '../assets/PJDiamondIcon';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -14,12 +14,12 @@ import WebNavBanner from '../components/WebNavBanner';
 import { withAuthGuard } from '../withAuthGuard';
 
 // TODO: Import and use API functions for invoices when backend endpoints are ready
-import { apiAddInvoice, apiGetGoldSettings, apiGetInventoryNames, apiAddOrGetCustomer, apiUploadInvoicePDF, apiGetInvoices } from '../db';
+import { apiAddInvoice, apiGetGoldSettings, apiGetInventoryNames, apiAddOrGetCustomer, apiUploadInvoicePDF, apiGetInvoices, apiFindInventoryByName } from '../db';
 
 // Set API base URL for all platforms
 const API_BASE = typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_API_BASE
   ? process.env.EXPO_PUBLIC_API_BASE
-  : 'http://192.168.29.102:4000/api';
+  : 'https://192.168.29.102:4000/api';
 
 // Type for item row
 interface ItemRow {
@@ -501,40 +501,89 @@ export default withAuthGuard(function InvoiceScreen(props: any) {
                   onFocus={() => handleItemChange(idx, 'showDropdown', 'true')}
                   onBlur={() => setTimeout(() => handleItemChange(idx, 'showDropdown', ''), 200)}
                 />
-                {item.showDropdown === 'true' && inventoryNames.length > 0 && (
-                  <View style={{ position: 'absolute', top: 44, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#7c3aed', borderRadius: 6, zIndex: 100, maxHeight: 180, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 8 }}>
-                    <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 180 }}>
-                      {inventoryNames.filter(n => n.toLowerCase().includes(item.name.toLowerCase())).map((name, i, arr) => (
-                        <TouchableOpacity
-                          key={name}
-                          onPress={async () => {
-                            try {
-                              const res = await fetch(`${API_BASE}/inventory`);
-                              const all = await res.json();
-                              const found = all.find((inv: any) => inv.ItemName === name);
-                              if (found) {
-                                handleItemChange(idx, 'name', found.ItemName);
-                                handleItemChange(idx, 'desc', found.Description || '');
-                                handleItemChange(idx, 'weight', found.WeightPerPiece ? found.WeightPerPiece.toString() : '');
-                                handleItemChange(idx, 'inventory_id', found.id ? String(found.id) : ''); // set as string
-                              } else {
+                {/* Portal-based dropdown overlay for robust stacking */}
+                <Portal>
+                  {item.showDropdown === 'true' && inventoryNames.length > 0 && item.name && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        // Use getBoundingClientRect for web, fallback for native
+                        top: (() => {
+                          if (typeof window !== 'undefined' && Platform.OS === 'web') {
+                            const el = document.activeElement as HTMLElement | null;
+                            if (el) {
+                              const rect = el.getBoundingClientRect();
+                              return rect.bottom + window.scrollY;
+                            }
+                          }
+                          return 180 + idx * 56; // fallback: estimate position
+                        })(),
+                        left: (() => {
+                          if (typeof window !== 'undefined' && Platform.OS === 'web') {
+                            const el = document.activeElement as HTMLElement | null;
+                            if (el) {
+                              const rect = el.getBoundingClientRect();
+                              return rect.left + window.scrollX;
+                            }
+                          }
+                          return 100; // fallback
+                        })(),
+                        width: 240,
+                        backgroundColor: '#fff',
+                        borderWidth: 1,
+                        borderColor: '#7c3aed',
+                        borderRadius: 6,
+                        zIndex: 99999,
+                        maxHeight: 180,
+                        boxShadow: Platform.OS === 'web' ? '0 4px 16px rgba(0,0,0,0.18)' : undefined,
+                        elevation: 12,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.18,
+                        shadowRadius: 8,
+                        cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+                        overflow: 'visible',
+                      }}
+                    >
+                      <FlatList
+                        data={inventoryNames.filter(n => {
+                          const nNorm = n.trim().toLowerCase();
+                          const inputNorm = (item.name || '').trim().toLowerCase();
+                          return nNorm.includes(inputNorm);
+                        })}
+                        keyExtractor={item => item}
+                        renderItem={({ item: name }) => (
+                          <TouchableOpacity
+                            onPress={async () => {
+                              try {
+                                const found = await apiFindInventoryByName(name);
+                                if (found) {
+                                  handleItemChange(idx, 'name', found.ItemName);
+                                  handleItemChange(idx, 'desc', found.Description || '');
+                                  handleItemChange(idx, 'weight', found.WeightPerPiece ? found.WeightPerPiece.toString() : '');
+                                  handleItemChange(idx, 'inventory_id', found.id ? String(found.id) : '');
+                                } else {
+                                  handleItemChange(idx, 'name', name);
+                                  handleItemChange(idx, 'inventory_id', '');
+                                }
+                              } catch {
                                 handleItemChange(idx, 'name', name);
                                 handleItemChange(idx, 'inventory_id', '');
                               }
-                            } catch {
-                              handleItemChange(idx, 'name', name);
-                              handleItemChange(idx, 'inventory_id', '');
-                            }
-                            handleItemChange(idx, 'showDropdown', '');
-                          }}
-                          style={{ padding: 10, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderColor: '#eee', backgroundColor: name === item.name ? '#e0e7ff' : '#fff' }}
-                        >
-                          <Text style={{ color: '#222831' }}>{name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
+                              handleItemChange(idx, 'showDropdown', '');
+                            }}
+                            style={{ padding: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={{ color: '#222831', fontSize: 17 }}>{name}</Text>
+                          </TouchableOpacity>
+                        )}
+                        keyboardShouldPersistTaps="always"
+                        style={{ maxHeight: 180 }}
+                      />
+                    </View>
+                  )}
+                </Portal>
               </View>
             </DataTable.Cell>
             <DataTable.Cell style={{ minWidth: 100 }} textStyle={{ color: '#222831' }}>

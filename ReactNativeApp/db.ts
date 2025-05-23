@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import { useAuth } from './AuthContext';
 
-const API_BASE = Platform.OS === 'web' ? 'https://localhost:4000/api' : 'http://192.168.29.102:4000/api';
+const API_BASE = Platform.OS === 'web' ? 'https://localhost:4000/api' : 'https://192.168.29.102:4000/api';
 
 // Remove all direct SQLite usage from frontend
 let db: any = null;
@@ -137,6 +137,25 @@ export async function apiUploadInvoicePDF(invoiceId: number, pdfUri: string) {
     },
     body: formData,
   });
+}
+
+export async function apiFindInventoryByName(name: string) {
+  // Fetch all inventory and find by ItemName (case-insensitive, trimmed)
+  const all = await apiGetInventory();
+  const found = all.find((inv: any) =>
+    (inv.ItemName || '').trim().toLowerCase() === name.trim().toLowerCase()
+  );
+  return found;
+}
+
+export async function apiUpdateInventoryQuantity({ ItemName, WeightPerPiece, QuantityToAdd }: { ItemName: string, WeightPerPiece: number, QuantityToAdd: number }) {
+  const res = await apiFetch(`${API_BASE}/inventory/update-quantity`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ItemName, WeightPerPiece, QuantityToAdd })
+  });
+  if (!res.ok) throw new Error('Failed to update inventory quantity');
+  return res.json();
 }
 
 export default db;
