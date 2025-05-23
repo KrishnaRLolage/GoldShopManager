@@ -271,6 +271,29 @@ app.delete("/api/inventory/:id", (req, res) => {
   });
 });
 
+// Update inventory item by id
+app.put("/api/inventory/:id", (req, res) => {
+  const { id } = req.params;
+  const { ItemName, Description, Quantity, WeightPerPiece } = req.body;
+  if (
+    !ItemName ||
+    typeof Quantity !== "number" ||
+    typeof WeightPerPiece !== "number"
+  ) {
+    return res.status(400).json({ error: "Missing or invalid fields" });
+  }
+  const TotalWeight =
+    (parseFloat(WeightPerPiece) || 0) * (parseInt(Quantity) || 0);
+  db.run(
+    "UPDATE inventory SET ItemName = ?, Description = ?, Quantity = ?, WeightPerPiece = ?, TotalWeight = ? WHERE id = ?",
+    [ItemName, Description, Quantity, WeightPerPiece, TotalWeight, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id });
+    }
+  );
+});
+
 // API to get inventory item names for autocomplete
 app.get("/api/inventory-names", (req, res) => {
   const { q } = req.query;

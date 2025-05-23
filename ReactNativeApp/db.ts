@@ -158,4 +158,14 @@ export async function apiUpdateInventoryQuantity({ ItemName, WeightPerPiece, Qua
   return res.json();
 }
 
+export async function apiUpdateInventory(item: { id: number, ItemName: string, Description: string, Quantity: number, WeightPerPiece: number }) {
+  const res = await apiFetch(`${API_BASE}/inventory/${item.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item)
+  });
+  if (!res.ok) throw new Error('Failed to update inventory');
+  return res.json();
+}
+
 export default db;

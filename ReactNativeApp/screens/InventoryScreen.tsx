@@ -4,7 +4,7 @@ import { Text, Button, Avatar } from 'react-native-paper';
 import { useState, useEffect } from 'react';
 import { DataTable, TextInput, IconButton } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { apiGetInventory, apiAddInventory, apiDeleteInventory, apiGetInventoryNames, apiUpdateInventoryQuantity } from '../db';
+import { apiGetInventory, apiAddInventory, apiDeleteInventory, apiGetInventoryNames, apiUpdateInventoryQuantity, apiUpdateInventory } from '../db';
 import WebNavBanner from '../components/WebNavBanner';
 import { withAuthGuard } from '../withAuthGuard';
 
@@ -26,6 +26,8 @@ export default withAuthGuard(function InventoryScreen(props: any) {
   const [allItemNames, setAllItemNames] = useState<string[]>([]); // For dropdown filter
   const [selectedItemName, setSelectedItemName] = useState<string>('All Items');
   const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const [editRowId, setEditRowId] = useState<number|null>(null);
+  const [editRowData, setEditRowData] = useState<InventoryItem|null>(null);
   const navigation = useNavigation();
 
   // Load all inventory item names for dropdown filter
@@ -149,6 +151,45 @@ export default withAuthGuard(function InventoryScreen(props: any) {
     } catch (e) {
       console.error('Failed to delete inventory item:', e);
     }
+  };
+
+  const handleEditClick = (item: InventoryItem) => {
+    setEditRowId(item.id!);
+    setEditRowData({ ...item });
+  };
+
+  const handleEditChange = (field: keyof InventoryItem, value: string) => {
+    if (!editRowData) return;
+    let newItem = { ...editRowData, [field]: value };
+    if (field === 'Quantity' || field === 'WeightPerPiece') {
+      const qty = parseInt(field === 'Quantity' ? value : newItem.Quantity) || 0;
+      const wpp = parseFloat(field === 'WeightPerPiece' ? value : newItem.WeightPerPiece) || 0;
+      newItem.TotalWeight = (qty * wpp).toString();
+    }
+    setEditRowData(newItem);
+  };
+
+  const handleEditSave = async () => {
+    if (!editRowData || !editRowId) return;
+    try {
+      await apiUpdateInventory({
+        id: editRowId,
+        ItemName: editRowData.ItemName,
+        Description: editRowData.Description,
+        Quantity: editRowData.Quantity ? parseInt(editRowData.Quantity) : 0,
+        WeightPerPiece: editRowData.WeightPerPiece ? parseFloat(editRowData.WeightPerPiece) : 0
+      });
+      setEditRowId(null);
+      setEditRowData(null);
+      await loadInventory();
+    } catch (e) {
+      console.error('Failed to update inventory item:', e);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditRowId(null);
+    setEditRowData(null);
   };
 
   return (
@@ -317,14 +358,63 @@ export default withAuthGuard(function InventoryScreen(props: any) {
             key={item.id || idx}
             style={{ backgroundColor: idx % 2 === 0 ? '#f9fafb' : '#f0f4f8' }}
           >
-            <DataTable.Cell style={{ flex: 2 }} textStyle={{ color: '#222831' }}>{item.ItemName}</DataTable.Cell>
-            <DataTable.Cell style={{ flex: 2 }} textStyle={{ color: '#222831' }}>{item.Description}</DataTable.Cell>
-            <DataTable.Cell style={{ flex: 1 }} textStyle={{ color: '#222831' }}>{item.Quantity}</DataTable.Cell>
-            <DataTable.Cell style={{ flex: 1 }} textStyle={{ color: '#222831' }}>{item.WeightPerPiece}</DataTable.Cell>
-            <DataTable.Cell style={{ flex: 1 }} textStyle={{ color: '#222831' }}>{item.TotalWeight}</DataTable.Cell>
-            <DataTable.Cell style={{ flex: 0.7 }}>
-              <IconButton icon="delete" onPress={() => handleDeleteRow(item)} theme={{ colors: { onSurface: '#c00' } }} />
-            </DataTable.Cell>
+            {editRowId === item.id ? (
+              <>
+                <DataTable.Cell style={{ flex: 2 }}>
+                  <TextInput
+                    value={editRowData?.ItemName}
+                    onChangeText={text => handleEditChange('ItemName', text)}
+                    style={{ backgroundColor: 'transparent', height: 36, fontWeight: '600' }}
+                  />
+                </DataTable.Cell>
+                <DataTable.Cell style={{ flex: 2 }}>
+                  <TextInput
+                    value={editRowData?.Description}
+                    onChangeText={text => handleEditChange('Description', text)}
+                    style={{ backgroundColor: 'transparent', height: 36, fontWeight: '600' }}
+                  />
+                </DataTable.Cell>
+                <DataTable.Cell style={{ flex: 1 }}>
+                  <TextInput
+                    value={editRowData?.Quantity}
+                    onChangeText={text => handleEditChange('Quantity', text)}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: 'transparent', height: 36, fontWeight: '600' }}
+                  />
+                </DataTable.Cell>
+                <DataTable.Cell style={{ flex: 1 }}>
+                  <TextInput
+                    value={editRowData?.WeightPerPiece}
+                    onChangeText={text => handleEditChange('WeightPerPiece', text)}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: 'transparent', height: 36, fontWeight: '600' }}
+                  />
+                </DataTable.Cell>
+                <DataTable.Cell style={{ flex: 1 }}>
+                  <TextInput
+                    value={editRowData?.TotalWeight}
+                    editable={false}
+                    style={{ backgroundColor: 'transparent', height: 36, fontWeight: '600' }}
+                  />
+                </DataTable.Cell>
+                <DataTable.Cell style={{ flex: 0.7, flexDirection: 'row', alignItems: 'center' }}>
+                  <IconButton icon="content-save" onPress={handleEditSave} />
+                  <IconButton icon="close" onPress={handleEditCancel} />
+                </DataTable.Cell>
+              </>
+            ) : (
+              <>
+                <DataTable.Cell style={{ flex: 2 }} textStyle={{ color: '#222831' }}>{item.ItemName}</DataTable.Cell>
+                <DataTable.Cell style={{ flex: 2 }} textStyle={{ color: '#222831' }}>{item.Description}</DataTable.Cell>
+                <DataTable.Cell style={{ flex: 1 }} textStyle={{ color: '#222831' }}>{item.Quantity}</DataTable.Cell>
+                <DataTable.Cell style={{ flex: 1 }} textStyle={{ color: '#222831' }}>{item.WeightPerPiece}</DataTable.Cell>
+                <DataTable.Cell style={{ flex: 1 }} textStyle={{ color: '#222831' }}>{item.TotalWeight}</DataTable.Cell>
+                <DataTable.Cell style={{ flex: 0.7, flexDirection: 'row', alignItems: 'center' }}>
+                  <IconButton icon="pencil" onPress={() => handleEditClick(item)} />
+                  <IconButton icon="delete" onPress={() => handleDeleteRow(item)} theme={{ colors: { onSurface: '#c00' } }} />
+                </DataTable.Cell>
+              </>
+            )}
           </DataTable.Row>
         ))}
       </DataTable>
