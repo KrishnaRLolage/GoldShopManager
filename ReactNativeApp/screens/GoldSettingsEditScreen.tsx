@@ -4,9 +4,8 @@ import { Text, TextInput, Button, Card } from 'react-native-paper';
 import { apiGetGoldSettings, apiUpdateGoldSettings } from '../db';
 import { useEffect } from 'react';
 import WebNavBanner from '../components/WebNavBanner';
-import { withAuthGuard } from '../withAuthGuard';
 
-export default withAuthGuard(function GoldSettingsEditScreen({ navigation }: any) {
+export default function GoldSettingsEditScreen({ navigation }: any) {
   const [goldRate, setGoldRate] = React.useState('');
   const [gstRate, setGstRate] = React.useState('');
   const [makingCharge, setMakingCharge] = React.useState('');
@@ -80,7 +79,7 @@ export default withAuthGuard(function GoldSettingsEditScreen({ navigation }: any
       </Card>
     </View>
   );
-});
+};
 
 const styles = StyleSheet.create({
   container: {

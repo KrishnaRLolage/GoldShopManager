@@ -6,9 +6,9 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useEffect } from 'react';
 import WebNavBanner from '../components/WebNavBanner';
-import { withAuthGuard } from '../withAuthGuard';
+import { SessionExpiredScreen } from '../components/SessionExpiredScreen';
 
-export default withAuthGuard(function BillingHistoryScreen(props: any) {
+export default function BillingHistoryScreen(props: any) {
   const [loading, setLoading] = React.useState(true);
   const [history, setHistory] = React.useState<any[]>([]);
   const [error, setError] = React.useState('');
@@ -118,6 +118,15 @@ export default withAuthGuard(function BillingHistoryScreen(props: any) {
     }
   };
 
+  if (error && error.toLowerCase().includes('session expired')) {
+    // Show SessionExpiredScreen if error is session expired
+    return <SessionExpiredScreen onLogin={() => {
+      if (props.navigation && props.navigation.reset) {
+        props.navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      }
+    }} />;
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <WebNavBanner />
@@ -182,7 +191,7 @@ export default withAuthGuard(function BillingHistoryScreen(props: any) {
       )}
     </ScrollView>
   );
-});
+};
 
 const styles = StyleSheet.create({
   container: {

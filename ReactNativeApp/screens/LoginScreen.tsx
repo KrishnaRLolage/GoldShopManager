@@ -2,16 +2,14 @@ import * as React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Text, Button, TextInput } from 'react-native-paper';
 import PJDiamondIcon from '../assets/PJDiamondIcon';
-import db, { initializeDatabase, apiLogin } from '../db';
+import { initializeDatabase, apiLogin} from '../db';
 import { useEffect } from 'react';
 import WebNavBanner from '../components/WebNavBanner';
-import { useAuth } from '../AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
-  const { login } = useAuth();
 
   React.useEffect(() => {
     initializeDatabase();
@@ -19,14 +17,14 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleLogin = async () => {
     try {
-      // Expect backend to return { user, token }
-      const result = await apiLogin(username, password);
-      if (result && result.user) {
-        setError('');
-        login(result.user); // Set user in context
+      setError('');
+      // Call login API and only navigate if JWT is received
+      const resp = await apiLogin(username, password);
+      const token = resp.token || (resp.data && resp.data.token);
+      if (token) {
         navigation.navigate('Dashboard');
       } else {
-        setError('Invalid username or password');
+        setError('Invalid credentials or no token received.');
       }
     } catch (error: any) {
       setError(error.message || 'Login error. Please try again.');

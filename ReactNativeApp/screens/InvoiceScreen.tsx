@@ -11,7 +11,6 @@ import * as FileSystem from 'expo-file-system';
 import { WebView } from 'react-native-webview';
 import { useEffect } from 'react';
 import WebNavBanner from '../components/WebNavBanner';
-import { withAuthGuard } from '../withAuthGuard';
 
 // TODO: Import and use API functions for invoices when backend endpoints are ready
 import { apiAddInvoice, apiGetGoldSettings, apiGetInventoryNames, apiAddOrGetCustomer, apiUploadInvoicePDF, apiGetInvoices, apiFindInventoryByName } from '../db';
@@ -101,7 +100,7 @@ function InvoiceCustomerDetails({ invoice, customer, setCustomer }: { invoice: a
   );
 }
 
-export default withAuthGuard(function InvoiceScreen(props: any) {
+export default function InvoiceScreen(props: any) {
   // Placeholder state for invoice fields
   const [customer, setCustomer] = React.useState({ name: '', address: '', contact: '' });
   const [invoice, setInvoice] = React.useState({ number: 'INV-001', date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }), });
@@ -700,7 +699,7 @@ export default withAuthGuard(function InvoiceScreen(props: any) {
       {/* Note: The PDF/printout will match the generated HTML, not the React Native UI. */}
     </ScrollView>
   );
-});
+};
 
 const styles = StyleSheet.create({
   container: {

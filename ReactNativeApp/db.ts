@@ -1,8 +1,129 @@
-import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { useAuth } from './AuthContext';
+import { useState } from 'react';
 
 const API_BASE = Platform.OS === 'web' ? 'https://localhost:4000/api' : 'https://192.168.29.102:4000/api';
+
+// --- WebSocket setup ---
+const WS_URL = Platform.OS === 'web'
+  ? 'wss://localhost:4000'
+  : 'wss://192.168.29.102:4000';
+
+let ws: WebSocket | null = null;
+let wsReady: Promise<void> | null = null;
+let wsToken: string | null = null;
+let wsReqId = 1;
+const wsPending: Record<number, { resolve: Function, reject: Function }> = {};
+let sessionExpiredCallbacks: (() => void)[] = [];
+
+export function onSessionExpired(cb: () => void) {
+  sessionExpiredCallbacks.push(cb);
+}
+
+// --- Session ID persistence (not JWT) ---
+const SESSION_ID_KEY = 'session_id';
+
+function getSessionId() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage.getItem(SESSION_ID_KEY);
+  }
+  return null;
+}
+
+function setSessionId(id: string | null) {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    if (id) window.localStorage.setItem(SESSION_ID_KEY, id);
+    else window.localStorage.removeItem(SESSION_ID_KEY);
+  }
+}
+
+function ensureWS() {
+  if (ws && ws.readyState === 1) return Promise.resolve();
+  if (wsReady) return wsReady;
+  ws = new WebSocket(WS_URL);
+  wsReady = new Promise((resolve, reject) => {
+    ws!.onopen = () => resolve();
+    ws!.onerror = (e) => reject(e);
+    ws!.onclose = () => {
+      wsReady = null;
+      ws = null;
+    };
+    ws!.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.action === 'sessionExpired') {
+          setSessionId(null); // Clear sessionId on session expiration
+          sessionExpiredCallbacks.forEach(cb => cb());
+          sessionExpiredCallbacks = [];
+          return;
+        }
+        if (msg.reqId && wsPending[msg.reqId]) {
+          if (msg.status === 'success') wsPending[msg.reqId].resolve(msg.data);
+          else wsPending[msg.reqId].reject(new Error(msg.error || 'WebSocket error'));
+          delete wsPending[msg.reqId];
+        }
+      } catch {}
+    };
+  });
+  return wsReady;
+}
+
+function wsSend(action: string, payload: any = {}, tokenOverride?: string): Promise<any> {
+  console.log('wsSend => wsToken: ', wsToken, 'action:', action, 'payload:', payload);
+  return ensureWS().then(() => {
+    return new Promise((resolve, reject) => {
+      const reqId = wsReqId++;
+      wsPending[reqId] = { resolve, reject };
+      // Always send the latest wsToken and sessionId in every API call
+      const sessionId = getSessionId();
+      ws!.send(JSON.stringify({ action, payload, token: wsToken, sessionId, reqId }));
+      // Timeout after 10s
+      setTimeout(() => {
+        if (wsPending[reqId]) {
+          wsPending[reqId].reject(new Error('WebSocket timeout'));
+          delete wsPending[reqId];
+        }
+      }, 10000);
+    });
+  });
+}
+
+// --- API functions using WebSocket ---
+export async function apiLogin(username: string, password: string) {
+  const resp = await wsSend('login', { username, password });
+  wsToken = resp.token || (resp.data && resp.data.token) || null;
+  // Store sessionId if provided by backend
+  const sessionId = resp.sessionId || (resp.data && resp.data.sessionId) || null;
+  setSessionId(sessionId);
+  console.log('WebSocket login successful, token:', wsToken, 'sessionId:', sessionId);
+  return resp;
+}
+
+// On app start, if sessionId exists, try to resume session
+(async function tryResumeSession() {
+  const sessionId = getSessionId();
+  if (sessionId) {
+    try {
+      // Ask backend to resume session and get a new JWT
+      const resp = await wsSend('resumeSession', { sessionId });
+      wsToken = resp.token || (resp.data && resp.data.token) || null;
+      if (!wsToken) setSessionId(null); // Remove invalid sessionId
+    } catch {
+      setSessionId(null);
+    }
+  }
+})();
+
+export async function apiGetInventory() {
+  return wsSend('getInventory');
+}
+
+export async function apiAddInventory(item: { ItemName: string, Description: string, Quantity: number, WeightPerPiece: number }) {
+  return wsSend('addInventory', item);
+}
+
+export async function apiDeleteInventory(id: number) {
+  return wsSend('deleteInventory', { id });
+}
 
 // Remove all direct SQLite usage from frontend
 let db: any = null;
@@ -12,133 +133,32 @@ export async function initializeDatabase() {
   // No-op: DB is managed by backend now
 }
 
-// --- JWT fetch wrapper ---
-export async function apiFetch(url: string, options: any = {}, tokenOverride?: string) {
-  // For login endpoint, do not send Authorization header
-  const isLogin = url.includes('/login');
-  let headers = options.headers || {};
-  if (!isLogin && tokenOverride) {
-    headers['Authorization'] = `Bearer ${tokenOverride}`;
-  }
-  // Always send credentials for cookie-based auth
-  const res = await fetch(url, { ...options, headers, credentials: 'include' });
-  if (res.status === 401) {
-    throw new Error('Session expired. Please log in again.');
-  }
-  return res;
+// --- The following REST-based API functions are not yet migrated to WebSocket ---
+function notYetMigrated(name: string): never {
+  throw new Error(`${name} is not yet supported via WebSocket. Please migrate this endpoint.`);
 }
 
-export async function apiLogin(username: string, password: string) {
-  const res = await apiFetch(`${API_BASE}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
-  if (!res.ok) throw new Error((await res.json()).error || 'Login failed');
-  return res.json();
+export async function apiAddInvoice(invoice: any) {
+  notYetMigrated('apiAddInvoice');
 }
-
-export async function apiGetInventory() {
-  const res = await apiFetch(`${API_BASE}/inventory`);
-  if (!res.ok) throw new Error('Failed to fetch inventory');
-  return res.json();
-}
-
-export async function apiAddInventory(item: { ItemName: string, Description: string, Quantity: number, WeightPerPiece: number }) {
-  const res = await apiFetch(`${API_BASE}/inventory`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(item)
-  });
-  if (!res.ok) throw new Error('Failed to add inventory');
-  return res.json();
-}
-
-export async function apiDeleteInventory(id: number) {
-  const res = await apiFetch(`${API_BASE}/inventory/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete inventory');
-  return res.json();
-}
-
-export async function apiAddInvoice(invoice: {
-  customer_id: number;
-  date: string;
-  total: number;
-  items: Array<{ inventory_id: number; quantity: number; price: number }>;
-}) {
-  const res = await apiFetch(`${API_BASE}/invoices`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(invoice)
-  });
-  if (!res.ok) throw new Error('Failed to create invoice');
-  return res.json();
-}
-
 export async function apiGetGoldSettings() {
-  const res = await apiFetch(`${API_BASE}/gold-settings`);
-  if (!res.ok) throw new Error('Failed to fetch gold settings');
-  return res.json();
+  notYetMigrated('apiGetGoldSettings');
 }
-
-// Add API function to update gold settings
-export async function apiUpdateGoldSettings({ gold_rate, gst_rate, making_charge_per_gram }: { gold_rate: number; gst_rate: number; making_charge_per_gram: number }) {
-  const res = await apiFetch(`${API_BASE}/gold-settings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gold_rate, gst_rate, making_charge_per_gram })
-  });
-  if (!res.ok) throw new Error('Failed to update gold settings');
-  return res.json();
+export async function apiUpdateGoldSettings(_: any) {
+  notYetMigrated('apiUpdateGoldSettings');
 }
-
-export async function apiGetInventoryNames(q: string) {
-  const res = await apiFetch(`${API_BASE}/inventory-names?q=${encodeURIComponent(q)}`);
-  if (!res.ok) throw new Error('Failed to fetch inventory names');
-  return res.json();
+export async function apiGetInventoryNames(query: string) {
+  return wsSend('getInventoryNames', { query });
 }
-
-export async function apiAddOrGetCustomer(customer: { name: string; contact?: string; address?: string }) {
-  const res = await apiFetch(`${API_BASE}/add-or-get-customer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(customer)
-  });
-  if (!res.ok) throw new Error('Failed to add or get customer');
-  const data = await res.json();
-  return data.id;
+export async function apiAddOrGetCustomer(_: any) {
+  notYetMigrated('apiAddOrGetCustomer');
 }
-
 export async function apiGetInvoices() {
-  const res = await apiFetch(`${API_BASE}/invoices`);
-  if (!res.ok) throw new Error('Failed to fetch invoices');
-  return res.json();
+  return wsSend('getInvoices');
 }
-
-/**
- * Uploads a PDF file for an invoice to the backend and links it to the invoice.
- * @param {number} invoiceId - The ID of the invoice to link the PDF to.
- * @param {string} pdfUri - The local URI of the PDF file to upload.
- * @returns {Promise<Response>} The fetch response from the backend.
- */
-export async function apiUploadInvoicePDF(invoiceId: number, pdfUri: string) {
-  const formData = new FormData();
-  formData.append('invoice_id', String(invoiceId));
-  formData.append('pdf', {
-    uri: pdfUri,
-    name: `invoice_${invoiceId}.pdf`,
-    type: 'application/pdf',
-  } as any);
-  
-  return apiFetch(`${API_BASE}/upload-invoice-pdf`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-    body: formData,
-  });
+export async function apiUploadInvoicePDF(_: number, __: string) {
+  notYetMigrated('apiUploadInvoicePDF');
 }
-
 export async function apiFindInventoryByName(name: string) {
   // Fetch all inventory and find by ItemName (case-insensitive, trimmed)
   const all = await apiGetInventory();
@@ -149,23 +169,14 @@ export async function apiFindInventoryByName(name: string) {
 }
 
 export async function apiUpdateInventoryQuantity({ ItemName, WeightPerPiece, QuantityToAdd }: { ItemName: string, WeightPerPiece: number, QuantityToAdd: number }) {
-  const res = await apiFetch(`${API_BASE}/inventory/update-quantity`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ItemName, WeightPerPiece, QuantityToAdd })
-  });
-  if (!res.ok) throw new Error('Failed to update inventory quantity');
-  return res.json();
+  return wsSend('updateInventoryQuantity', { ItemName, WeightPerPiece, QuantityToAdd });
 }
 
-export async function apiUpdateInventory(item: { id: number, ItemName: string, Description: string, Quantity: number, WeightPerPiece: number }) {
-  const res = await apiFetch(`${API_BASE}/inventory/${item.id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(item)
-  });
-  if (!res.ok) throw new Error('Failed to update inventory');
-  return res.json();
+// --- API function for getting all customers ---
+export async function apiGetCustomers() {
+  return wsSend('getCustomers');
 }
 
-export default db;
+export async function apiUpdateCustomer(customer: any) {
+  return wsSend('updateCustomer', customer);
+}

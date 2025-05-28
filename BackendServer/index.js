@@ -9,7 +9,11 @@ const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const https = require("https");
+const { WebSocketServer } = require("ws");
+const crypto = require("crypto");
 const app = express();
+app.use(cors());
+app.use(express.json());
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || "your-very-secret-key";
 const JWT_EXPIRES_IN = 5 * 60; // 5 minutes (in seconds)
@@ -522,17 +526,334 @@ app.post("/api/upload-invoice-pdf", async (req, res) => {
   }
 });
 
-// Add more endpoints for customers, invoices, billing_history as needed
+// --- HTTPS server setup ---
+const certPath = path.join(__dirname, "certs", "server.cert");
+const keyPath = path.join(__dirname, "certs", "server.key");
+const server = https.createServer(
+  {
+    cert: fs.readFileSync(certPath),
+    key: fs.readFileSync(keyPath),
+  },
+  app
+);
 
-const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, "certs/server.key")),
-  cert: fs.readFileSync(path.join(__dirname, "certs/server.cert")),
-};
+// --- In-memory session store and sessionId generator ---
+const sessionStore = {};
+const SESSION_ID_BYTES = 32;
+function generateSessionId() {
+  return crypto.randomBytes(SESSION_ID_BYTES).toString("hex");
+}
 
-https.createServer(httpsOptions, app).listen(PORT, () => {
-  console.log(`Backend server running securely on https://localhost:${PORT}`);
+// --- WebSocket server setup ---
+const wss = new WebSocketServer({ server });
+wss.on("connection", (ws) => {
+  console.log("WebSocket client connected");
+
+  ws.on("message", async (message) => {
+    let msg;
+    try {
+      msg = JSON.parse(message.toString());
+    } catch (e) {
+      ws.send(
+        JSON.stringify({
+          action: "error",
+          status: "error",
+          error: "Invalid JSON",
+        })
+      );
+      return;
+    }
+    const { action, payload, token, sessionId, reqId } = msg;
+
+    // Helper to send response with reqId
+    const send = (resp) => ws.send(JSON.stringify({ ...resp, reqId }));
+
+    // Helper to verify JWT (except for login)
+    function verifyJWT() {
+      if (!token) return null;
+      try {
+        return jwt.verify(token, JWT_SECRET);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Handle actions
+    if (action === "login") {
+      const { username, password } = payload || {};
+      db.get(
+        "SELECT * FROM users WHERE username = ? AND password = ?",
+        [username, password],
+        (err, row) => {
+          if (err || !row) {
+            send({
+              action: "login",
+              status: "error",
+              error: "Invalid credentials",
+            });
+          } else {
+            const token = jwt.sign(
+              { id: row.id, username: row.username, role: row.role },
+              JWT_SECRET,
+              { expiresIn: JWT_EXPIRES_IN }
+            );
+            // Generate a sessionId and store mapping to user and token
+            const sessionId = generateSessionId();
+            sessionStore[sessionId] = {
+              userId: row.id,
+              username: row.username,
+              role: row.role,
+              token,
+              expiresAt: Date.now() + JWT_EXPIRES_IN * 1000,
+            };
+            const { password, ...userWithoutPassword } = row;
+            send({
+              action: "login",
+              status: "success",
+              data: { user: userWithoutPassword, token, sessionId },
+            });
+          }
+        }
+      );
+    } else if (action === "resumeSession") {
+      // Resume session using sessionId, issue new JWT if valid
+      const { sessionId } = payload || {};
+      const session = sessionStore[sessionId];
+      if (!session || session.expiresAt < Date.now()) {
+        // Session not found or expired
+        send({
+          action: "resumeSession",
+          status: "error",
+          error: "Session expired",
+        });
+        if (sessionId) delete sessionStore[sessionId];
+        return;
+      }
+      // Issue new JWT and update session expiry
+      const token = jwt.sign(
+        { id: session.userId, username: session.username, role: session.role },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+      session.token = token;
+      session.expiresAt = Date.now() + JWT_EXPIRES_IN * 1000;
+      send({ action: "resumeSession", status: "success", data: { token } });
+    } else if (
+      [
+        "getInventory",
+        "addInventory",
+        "deleteInventory",
+        "updateInventory",
+        "updateInventoryQuantity",
+        "getInvoices",
+        "getInventoryNames",
+        "getCustomers",
+        "updateCustomer", // Add updateCustomer action
+      ].includes(action)
+    ) {
+      // --- Use sessionId for all WebSocket API actions ---
+      let user = null;
+      let jwtToVerify = token;
+      // If sessionId is provided, look up session and get its JWT
+      if (sessionId && sessionStore[sessionId]) {
+        const session = sessionStore[sessionId];
+        // Check if session expired
+        if (session.expiresAt < Date.now()) {
+          send({
+            action: "sessionExpired",
+            status: "error",
+            error: "Session expired",
+          });
+          delete sessionStore[sessionId];
+          ws.close();
+          return;
+        }
+        jwtToVerify = session.token;
+      }
+      // Validate JWT (from session or direct)
+      try {
+        user = jwt.verify(jwtToVerify, JWT_SECRET);
+      } catch (e) {
+        send({
+          action: "sessionExpired",
+          status: "error",
+          error: "Session expired",
+        });
+        if (sessionId) delete sessionStore[sessionId];
+        ws.close();
+        return;
+      }
+      // ...existing code for each action...
+      if (action === "getInventory") {
+        db.all("SELECT * FROM inventory", [], (err, rows) => {
+          if (err) send({ action, status: "error", error: err.message });
+          else send({ action, status: "success", data: rows });
+        });
+      } else if (action === "updateCustomer") {
+        const { id, name, phone, address, email } = payload || {};
+        if (!id || !name) {
+          send({ action, status: "error", error: "Missing id or name" });
+          return;
+        }
+        db.run(
+          "UPDATE customers SET name = ?, phone = ?, address = ?, email = ? WHERE id = ?",
+          [name, phone || "", address || "", email || "", id],
+          function (err) {
+            if (err) send({ action, status: "error", error: err.message });
+            else send({ action, status: "success", data: { id } });
+          }
+        );
+      } else if (action === "getCustomers") {
+        db.all("SELECT * FROM customers ORDER BY id DESC", [], (err, rows) => {
+          if (err) send({ action, status: "error", error: err.message });
+          else send({ action, status: "success", data: rows });
+        });
+      } else if (action === "getInvoices") {
+        db.all(
+          `SELECT invoices.id, invoices.date, invoices.total, 
+            customers.name as customer_name, customers.address as customer_address, customers.phone as customer_contact,
+            (SELECT id FROM invoice_pdfs WHERE invoice_id = invoices.id ORDER BY created_at DESC LIMIT 1) as pdf_id,
+            (SELECT pdf_blob FROM invoice_pdfs WHERE invoice_id = invoices.id ORDER BY created_at DESC LIMIT 1) as pdf_blob
+     FROM invoices
+     LEFT JOIN customers ON invoices.customer_id = customers.id
+     ORDER BY invoices.id DESC`,
+          (err, rows) => {
+            if (err)
+              return send({ action, status: "error", error: err.message });
+            rows.forEach((row) => {
+              row.has_pdf = !!row.pdf_id;
+              row.pdf_url = row.pdf_id
+                ? `/api/invoice-pdf/${row.pdf_id}`
+                : null;
+              // Convert pdf_blob to base64 if present
+              if (row.pdf_blob) {
+                row.pdf_blob_base64 = Buffer.from(row.pdf_blob).toString(
+                  "base64"
+                );
+              } else {
+                row.pdf_blob_base64 = null;
+              }
+              // Remove raw binary from response for safety
+              delete row.pdf_blob;
+            });
+            send({ action, status: "success", data: rows });
+          }
+        );
+      } else if (action === "addInventory") {
+        const { ItemName, Description, Quantity, WeightPerPiece } =
+          payload || {};
+        const TotalWeight =
+          (parseFloat(WeightPerPiece) || 0) * (parseInt(Quantity) || 0);
+        db.run(
+          "INSERT INTO inventory (ItemName, Description, Quantity, WeightPerPiece, TotalWeight) VALUES (?, ?, ?, ?, ?)",
+          [ItemName, Description, Quantity, WeightPerPiece, TotalWeight],
+          function (err) {
+            if (err) send({ action, status: "error", error: err.message });
+            else send({ action, status: "success", data: { id: this.lastID } });
+          }
+        );
+      } else if (action === "deleteInventory") {
+        const { id } = payload || {};
+        db.run("DELETE FROM inventory WHERE id = ?", [id], function (err) {
+          if (err) send({ action, status: "error", error: err.message });
+          else
+            send({
+              action,
+              status: "success",
+              data: { deleted: this.changes },
+            });
+        });
+      } else if (action === "updateInventory") {
+        const { id, ItemName, Description, Quantity, WeightPerPiece } =
+          payload || {};
+        if (
+          !id ||
+          !ItemName ||
+          typeof Quantity !== "number" ||
+          typeof WeightPerPiece !== "number"
+        ) {
+          send({ action, status: "error", error: "Missing or invalid fields" });
+          return;
+        }
+        const TotalWeight =
+          (parseFloat(WeightPerPiece) || 0) * (parseInt(Quantity) || 0);
+        db.run(
+          "UPDATE inventory SET ItemName = ?, Description = ?, Quantity = ?, WeightPerPiece = ?, TotalWeight = ? WHERE id = ?",
+          [ItemName, Description, Quantity, WeightPerPiece, TotalWeight, id],
+          function (err) {
+            if (err) send({ action, status: "error", error: err.message });
+            else send({ action, status: "success", data: { id } });
+          }
+        );
+      } else if (action === "updateInventoryQuantity") {
+        const { ItemName, WeightPerPiece, QuantityToAdd } = payload || {};
+        if (
+          !ItemName ||
+          typeof WeightPerPiece !== "number" ||
+          typeof QuantityToAdd !== "number"
+        ) {
+          send({ action, status: "error", error: "Missing or invalid fields" });
+          return;
+        }
+        db.get(
+          "SELECT * FROM inventory WHERE ItemName = ? AND WeightPerPiece = ?",
+          [ItemName, WeightPerPiece],
+          (err, row) => {
+            if (err) send({ action, status: "error", error: err.message });
+            else if (!row)
+              send({ action, status: "error", error: "Item not found" });
+            else {
+              const newQty = row.Quantity + QuantityToAdd;
+              const newTotalWeight = newQty * WeightPerPiece;
+              db.run(
+                "UPDATE inventory SET Quantity = ?, TotalWeight = ? WHERE id = ?",
+                [newQty, newTotalWeight, row.id],
+                function (err) {
+                  if (err)
+                    send({ action, status: "error", error: err.message });
+                  else
+                    send({
+                      action,
+                      status: "success",
+                      data: { id: row.id, newQty, newTotalWeight },
+                    });
+                }
+              );
+            }
+          }
+        );
+      } else if (action === "getInventoryNames") {
+        // Implement getInventoryNames WebSocket action
+        const { query } = payload || {};
+        db.all(
+          "SELECT DISTINCT ItemName FROM inventory WHERE ItemName LIKE ? ORDER BY ItemName LIMIT 10",
+          [`%${query || ""}%`],
+          (err, rows) => {
+            if (err) send({ action, status: "error", error: err.message });
+            else
+              send({
+                action,
+                status: "success",
+                data: rows.map((r) => r.ItemName),
+              });
+          }
+        );
+      } else {
+        send({ action: "error", status: "error", error: "Unknown action" });
+      }
+    } else {
+      send({ action: "error", status: "error", error: "Unknown action" });
+    }
+  });
+
+  ws.send(
+    JSON.stringify({
+      type: "welcome",
+      data: "Secure WebSocket connection established.",
+    })
+  );
 });
-// (Remove or comment out the old app.listen)
-// app.listen(PORT, () => {
-//   console.log(`Backend server running on port ${PORT}`);
-// });
+
+server.listen(PORT, () => {
+  console.log(`HTTPS & WebSocket server running on https://localhost:${PORT}`);
+});

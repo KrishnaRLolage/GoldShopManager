@@ -2,9 +2,8 @@ import * as React from 'react';
 import { View, StyleSheet, ScrollView, Platform, Image } from 'react-native';
 import { Text, Button, Card, Avatar } from 'react-native-paper';
 import { useEffect } from 'react';
-import { withAuthGuard } from '../withAuthGuard';
 
-export default withAuthGuard(function DashboardScreen({ navigation }: any) {
+export default function DashboardScreen({ navigation }: any) {
   return (
     <ScrollView contentContainerStyle={[styles.container, { flexGrow: 1, alignItems: 'center' }]}> 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
@@ -27,7 +26,7 @@ export default withAuthGuard(function DashboardScreen({ navigation }: any) {
       </Card>
     </ScrollView>
   );
-});
+};
 
 const styles = StyleSheet.create({
   container: {

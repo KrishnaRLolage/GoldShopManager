@@ -6,7 +6,6 @@ import { DataTable, TextInput, IconButton } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { apiGetInventory, apiAddInventory, apiDeleteInventory, apiGetInventoryNames, apiUpdateInventoryQuantity, apiUpdateInventory } from '../db';
 import WebNavBanner from '../components/WebNavBanner';
-import { withAuthGuard } from '../withAuthGuard';
 
 type InventoryItem = {
   id?: number;
@@ -17,7 +16,7 @@ type InventoryItem = {
   TotalWeight: string;
 };
 
-export default withAuthGuard(function InventoryScreen(props: any) {
+export default function InventoryScreen(props: any) {
   const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]); // For non-editable table
   const [addItem, setAddItem] = useState<InventoryItem>({ ItemName: '', Description: '', Quantity: '', WeightPerPiece: '', TotalWeight: '' });
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
@@ -420,7 +419,7 @@ export default withAuthGuard(function InventoryScreen(props: any) {
       </DataTable>
     </ScrollView>
   );
-});
+};
 
 const styles = StyleSheet.create({
   container: {
