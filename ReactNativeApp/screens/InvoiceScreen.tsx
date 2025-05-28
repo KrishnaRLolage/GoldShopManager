@@ -341,7 +341,8 @@ export default function InvoiceScreen(props: any) {
     }
     try {
       // Add or get customer ID
-      const customerId = await apiAddOrGetCustomer(customer);
+      const customerResp = await apiAddOrGetCustomer(customer);
+      const customerId = typeof customerResp === 'object' && customerResp !== null && 'id' in customerResp ? customerResp.id : customerResp;
       const payload = {
         customer_id: customerId,
         date: invoice.date,
@@ -366,7 +367,6 @@ export default function InvoiceScreen(props: any) {
           printWindow.onload = () => {
             printWindow.print();
           };
-          // Ensure loading spinner disappears when print dialog is closed
           printWindow.onafterprint = () => {
             setSaving(false);
           };
@@ -374,21 +374,14 @@ export default function InvoiceScreen(props: any) {
           setError('Unable to open print window. Please allow popups and try again.');
           setSaving(false);
         }
-        // Fallback: just in case onafterprint doesn't fire, set a timeout
         setTimeout(() => setSaving(false), 3000);
-        // --- Save PDF blob to backend in web mode ---
+        // --- Save PDF to backend via WebSocket ---
         try {
           // Use html2pdf.js or similar to generate a real PDF from HTML for production
-          // For now, upload the HTML as a PDF blob (backend will store as BLOB)
-          const pdfBlob = new Blob([html], { type: 'application/pdf' });
-          await fetch(`${API_BASE}/upload-invoice-pdf`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/pdf',
-              'x-invoice-id': result.id,
-            },
-            body: pdfBlob,
-          });
+          // For now, generate a PDF base64 string from HTML (simulate PDF for demo)
+          // In production, use a real PDF base64 string
+          const pdfBase64 = btoa(unescape(encodeURIComponent(html)));
+          await apiUploadInvoicePDF(result.id, pdfBase64);
         } catch (err) {
           setError('Invoice saved, but failed to upload PDF (web mode).');
         }

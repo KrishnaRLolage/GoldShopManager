@@ -140,7 +140,7 @@ function notYetMigrated(name: string): never {
 }
 
 export async function apiAddInvoice(invoice: any) {
-  notYetMigrated('apiAddInvoice');
+  return wsSend('addInvoice', invoice);
 }
 export async function apiGetGoldSettings() {
   return wsSend('getGoldSettings');
@@ -151,14 +151,14 @@ export async function apiUpdateGoldSettings({ gold_rate, gst_rate, making_charge
 export async function apiGetInventoryNames(query: string) {
   return wsSend('getInventoryNames', { query });
 }
-export async function apiAddOrGetCustomer(_: any) {
-  notYetMigrated('apiAddOrGetCustomer');
+export async function apiAddOrGetCustomer(customer: any) {
+  return wsSend('addOrGetCustomer', customer);
 }
 export async function apiGetInvoices() {
   return wsSend('getInvoices');
 }
-export async function apiUploadInvoicePDF(_: number, __: string) {
-  notYetMigrated('apiUploadInvoicePDF');
+export async function apiUploadInvoicePDF(invoiceId: number, pdfBase64: string) {
+  return wsSend('uploadInvoicePDF', { invoiceId, pdfBase64 });
 }
 export async function apiFindInventoryByName(name: string) {
   // Fetch all inventory and find by ItemName (case-insensitive, trimmed)

@@ -650,9 +650,12 @@ wss.on("connection", (ws) => {
         "getInvoices",
         "getInventoryNames",
         "getCustomers",
-        "updateCustomer", // Add updateCustomer action
+        "updateCustomer",
         "getGoldSettings",
         "updateGoldSettings",
+        "addOrGetCustomer",
+        "addInvoice",
+        "uploadInvoicePDF", // <-- Add this line
       ].includes(action)
     ) {
       // --- Use sessionId for all WebSocket API actions ---
@@ -696,6 +699,99 @@ wss.on("connection", (ws) => {
           if (err) send({ action, status: "error", error: err.message });
           else send({ action, status: "success", data: rows });
         });
+      } else if (action === "uploadInvoicePDF") {
+        // Accept base64 PDF via WebSocket: payload = { invoiceId, pdfBase64 }
+        const { invoiceId, pdfBase64 } = payload || {};
+        if (!invoiceId || !pdfBase64) {
+          send({
+            action,
+            status: "error",
+            error: "Missing invoiceId or pdfBase64",
+          });
+          return;
+        }
+        const buffer = Buffer.from(pdfBase64, "base64");
+        const createdAt = new Date().toISOString();
+        db.run(
+          "INSERT INTO invoice_pdfs (invoice_id, pdf_blob, created_at) VALUES (?, ?, ?)",
+          [invoiceId, buffer, createdAt],
+          function (err) {
+            if (err) send({ action, status: "error", error: err.message });
+            else send({ action, status: "success", data: { id: this.lastID } });
+          }
+        );
+      } else if (action === "addInvoice") {
+        const { customer_id, date, total, items } = payload || {};
+        if (
+          !customer_id ||
+          !date ||
+          !total ||
+          !Array.isArray(items) ||
+          items.length === 0
+        ) {
+          send({
+            action,
+            status: "error",
+            error: "Missing required invoice fields or items",
+          });
+          return;
+        }
+        db.run(
+          "INSERT INTO invoices (customer_id, date, total) VALUES (?, ?, ?)",
+          [customer_id, date, total],
+          function (err) {
+            if (err)
+              return send({ action, status: "error", error: err.message });
+            const invoiceId = this.lastID;
+            // Insert invoice items
+            const stmt = db.prepare(
+              "INSERT INTO invoice_items (invoice_id, inventory_id, quantity, price) VALUES (?, ?, ?, ?)"
+            );
+            for (const item of items) {
+              stmt.run(invoiceId, item.inventory_id, item.quantity, item.price);
+            }
+            stmt.finalize((err) => {
+              if (err)
+                return send({ action, status: "error", error: err.message });
+              send({ action, status: "success", data: { id: invoiceId } });
+            });
+          }
+        );
+      } else if (action === "addOrGetCustomer") {
+        const { name, contact, address } = payload || {};
+        if (!name || (!contact && !address)) {
+          send({
+            action,
+            status: "error",
+            error: "Name and at least one of contact or address required",
+          });
+          return;
+        }
+        db.get(
+          `SELECT * FROM customers WHERE name = ? AND (phone = ? OR address = ?)`,
+          [name, contact || "", address || ""],
+          (err, row) => {
+            if (err) send({ action, status: "error", error: err.message });
+            else if (row) {
+              send({ action, status: "success", data: { id: row.id } });
+            } else {
+              db.run(
+                `INSERT INTO customers (name, phone, address) VALUES (?, ?, ?)`,
+                [name, contact || "", address || ""],
+                function (err) {
+                  if (err)
+                    send({ action, status: "error", error: err.message });
+                  else
+                    send({
+                      action,
+                      status: "success",
+                      data: { id: this.lastID },
+                    });
+                }
+              );
+            }
+          }
+        );
       } else if (action === "getGoldSettings") {
         db.get(
           "SELECT * FROM gold_settings ORDER BY id DESC LIMIT 1",
