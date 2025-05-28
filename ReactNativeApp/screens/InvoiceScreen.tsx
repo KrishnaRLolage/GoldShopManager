@@ -39,13 +39,13 @@ interface ItemRow {
 function InvoiceHeader({ invoiceId }: { invoiceId: number | null }) {
   return (
     <>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, width: '100%' }}>
+      {/* <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, width: '100%' }}>
         <PJDiamondIcon size={120} style={{ position: 'absolute', left: 0, marginTop: 40 }} />
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#7c3aed', textAlign: 'center' }}>Pallavi Jewellers</Text>
         </View>
-      </View>
-      <Text style={{ color: '#222831', fontWeight: '600', textAlign: 'center', marginBottom: 20 }}>Invoice</Text>
+      </View> */}
+      <Text style={{ color: '#222831', fontSize: 28, fontWeight: '600', textAlign: 'center', marginBottom: 20 }}>Invoice</Text>
       <Text style={{ color: '#444', fontSize: 12, textAlign: 'center' }}>Near Sai Baba Kaman, Nevasa Road, Newasa Phata, Taluka Nevasa-Pincode: 414603</Text>
       <Text style={{ color: '#444', fontSize: 12, textAlign: 'center' }}>Phone: 9922881028 | GSTIN: 27ABCDE1234F1Z5</Text>
       {invoiceId && (

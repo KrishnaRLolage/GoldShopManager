@@ -2,16 +2,26 @@ import * as React from 'react';
 import { View, StyleSheet, ScrollView, Platform, Image } from 'react-native';
 import { Text, Button, Card, Avatar } from 'react-native-paper';
 import { useEffect } from 'react';
+import { onSessionExpired } from '../db';
 
 export default function DashboardScreen({ navigation }: any) {
+  useEffect(() => {
+    // Register session expired callback
+    const handleSessionExpired = () => {
+      navigation.reset({ index: 0, routes: [{ name: 'SessionExpired' }] });
+    };
+    onSessionExpired(handleSessionExpired);
+    // No cleanup needed because callbacks are cleared on session expiration
+  }, [navigation]);
+
   return (
     <ScrollView contentContainerStyle={[styles.container, { flexGrow: 1, alignItems: 'center' }]}> 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
-        <Image source={require('../assets/svg_shop_icon.jpg')} style={{ width: 100, height: 100, marginRight: 16, borderRadius: 12, resizeMode: 'contain' }} />
+        <Image source={require('../assets/svg_shop_icon.jpg')} style={{ width: 140, height: 140, marginRight: 16, borderRadius: 12, resizeMode: 'contain' }} />
         <Text style={{ fontWeight: 'bold', fontSize: 28, color: '#7c3aed', textAlign: 'center' }}>Pallavi Jewellers</Text>
       </View>
-      <Text style={{ color: '#444', fontSize: 12, textAlign: 'center' }}>Near Sai Baba Kaman, Nevasa Road, Newasa Phata, Taluka Nevasa-Pincode: 414603</Text>
-      <Text style={{ color: '#444', fontSize: 12, textAlign: 'center', marginBottom: 16 }}>Phone: 9922881028 | GSTIN: 27ABCDE1234F1Z5</Text>
+      {/* <Text style={{ color: '#444', fontSize: 12, textAlign: 'center' }}>Near Sai Baba Kaman, Nevasa Road, Newasa Phata, Taluka Nevasa-Pincode: 414603</Text>
+      <Text style={{ color: '#444', fontSize: 12, textAlign: 'center', marginBottom: 16 }}>Phone: 9922881028 | GSTIN: 27ABCDE1234F1Z5</Text> */}
       <Card style={[styles.card, { backgroundColor: '#ede9fe', borderColor: '#7c3aed', borderWidth: 1 }]} onPress={() => navigation.navigate('Invoice')}>
         <Card.Title title="Create Invoice" left={props => <Avatar.Icon {...props} icon="file-document" style={{ backgroundColor: '#7c3aed' }} />} titleStyle={{ color: '#7c3aed', fontWeight: 'bold' }} />
       </Card>

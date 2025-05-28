@@ -606,6 +606,7 @@ wss.on("connection", (ws) => {
               token,
               expiresAt: Date.now() + JWT_EXPIRES_IN * 1000,
             };
+            ws.sessionId = sessionId; // Attach sessionId to ws connection
             const { password, ...userWithoutPassword } = row;
             send({
               action: "login",
@@ -637,6 +638,7 @@ wss.on("connection", (ws) => {
       );
       session.token = token;
       session.expiresAt = Date.now() + JWT_EXPIRES_IN * 1000;
+      ws.sessionId = sessionId; // Attach sessionId to ws connection
       send({ action: "resumeSession", status: "success", data: { token } });
     } else if (
       [
@@ -649,6 +651,8 @@ wss.on("connection", (ws) => {
         "getInventoryNames",
         "getCustomers",
         "updateCustomer", // Add updateCustomer action
+        "getGoldSettings",
+        "updateGoldSettings",
       ].includes(action)
     ) {
       // --- Use sessionId for all WebSocket API actions ---
@@ -659,6 +663,9 @@ wss.on("connection", (ws) => {
         const session = sessionStore[sessionId];
         // Check if session expired
         if (session.expiresAt < Date.now()) {
+          console.log(
+            `Session expired for sessionId: ${sessionId}, deleting session`
+          );
           send({
             action: "sessionExpired",
             status: "error",
@@ -689,6 +696,35 @@ wss.on("connection", (ws) => {
           if (err) send({ action, status: "error", error: err.message });
           else send({ action, status: "success", data: rows });
         });
+      } else if (action === "getGoldSettings") {
+        db.get(
+          "SELECT * FROM gold_settings ORDER BY id DESC LIMIT 1",
+          (err, row) => {
+            if (err) send({ action, status: "error", error: err.message });
+            else send({ action, status: "success", data: row });
+          }
+        );
+      } else if (action === "updateGoldSettings") {
+        const { gold_rate, gst_rate, making_charge_per_gram } = payload || {};
+        if (
+          typeof gold_rate !== "number" ||
+          typeof gst_rate !== "number" ||
+          typeof making_charge_per_gram !== "number"
+        ) {
+          send({ action, status: "error", error: "Invalid input types" });
+          return;
+        }
+        const updated_at = new Date().toLocaleString("en-IN", {
+          hour12: false,
+        });
+        db.run(
+          "INSERT INTO gold_settings (gold_rate, gst_rate, making_charge_per_gram, updated_at) VALUES (?, ?, ?, ?)",
+          [gold_rate, gst_rate, making_charge_per_gram, updated_at],
+          function (err) {
+            if (err) send({ action, status: "error", error: err.message });
+            else send({ action, status: "success", data: { id: this.lastID } });
+          }
+        );
       } else if (action === "updateCustomer") {
         const { id, name, phone, address, email } = payload || {};
         if (!id || !name) {
@@ -853,6 +889,30 @@ wss.on("connection", (ws) => {
     })
   );
 });
+
+// --- Periodic session expiration check ---
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, session] of Object.entries(sessionStore)) {
+    if (session.expiresAt < now) {
+      // Find all connected WebSocket clients with this sessionId
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1 && client.sessionId === sessionId) {
+          client.send(
+            JSON.stringify({
+              action: "sessionExpired",
+              status: "error",
+              error: "Session expired",
+            })
+          );
+          client.close();
+        }
+      });
+      delete sessionStore[sessionId];
+      console.log(`Session expired (timer) for sessionId: ${sessionId}`);
+    }
+  }
+}, 10000); // Check every 10 seconds
 
 server.listen(PORT, () => {
   console.log(`HTTPS & WebSocket server running on https://localhost:${PORT}`);

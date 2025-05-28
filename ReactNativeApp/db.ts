@@ -51,6 +51,7 @@ function ensureWS() {
       try {
         const msg = JSON.parse(event.data);
         if (msg.action === 'sessionExpired') {
+          console.log('session expired callback');
           setSessionId(null); // Clear sessionId on session expiration
           sessionExpiredCallbacks.forEach(cb => cb());
           sessionExpiredCallbacks = [];
@@ -142,10 +143,10 @@ export async function apiAddInvoice(invoice: any) {
   notYetMigrated('apiAddInvoice');
 }
 export async function apiGetGoldSettings() {
-  notYetMigrated('apiGetGoldSettings');
+  return wsSend('getGoldSettings');
 }
-export async function apiUpdateGoldSettings(_: any) {
-  notYetMigrated('apiUpdateGoldSettings');
+export async function apiUpdateGoldSettings({ gold_rate, gst_rate, making_charge_per_gram }: { gold_rate: number, gst_rate: number, making_charge_per_gram: number }) {
+  return wsSend('updateGoldSettings', { gold_rate, gst_rate, making_charge_per_gram });
 }
 export async function apiGetInventoryNames(query: string) {
   return wsSend('getInventoryNames', { query });
