@@ -130,7 +130,7 @@ export default function BillingHistoryScreen(props: any) {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <WebNavBanner />
-      <Avatar.Icon size={64} icon="history" style={{ marginBottom: 24, alignSelf: 'center', backgroundColor: '#ede9fe' }} />
+      {/* <Avatar.Icon size={64} icon="history" style={{ marginBottom: 24, alignSelf: 'center', backgroundColor: '#ede9fe' }} /> */}
       <Text style={{ fontWeight: 'bold', fontSize: 20, marginBottom: 16, textAlign: 'center', color: '#7c3aed' }}>Billing History</Text>
       {loading ? (
         <ActivityIndicator animating size="large" style={{ marginTop: 32 }} color="#7c3aed" />

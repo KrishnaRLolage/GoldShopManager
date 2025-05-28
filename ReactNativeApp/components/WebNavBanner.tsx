@@ -4,7 +4,7 @@ import PJDiamondIcon from '../assets/PJDiamondIcon';
 
 const NAV_LINKS = [
   { label: 'Dashboard', screen: '/dashboard' },
-  { label: 'Invoices', screen: '/invoice' },
+  { label: 'Create Invoice', screen: '/invoice' },
   { label: 'Billing History', screen: '/billing-history' },
   { label: 'Inventory', screen: '/inventory' },
   { label: 'Customers', screen: '/customers' },
