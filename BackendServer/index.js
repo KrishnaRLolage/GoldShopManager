@@ -1004,6 +1004,8 @@ setInterval(() => {
   }
 }, 10000); // Check every 10 seconds
 
+const PORT = process.env.PORT || 4000;
+
 server.listen(PORT, () => {
   console.log(
     `Server running on http://localhost:${PORT} or your Render public URL`
