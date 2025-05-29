@@ -8,26 +8,19 @@ const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const https = require("https");
+const http = require("http");
 const { WebSocketServer } = require("ws");
 const crypto = require("crypto");
 const app = express();
-app.use(cors());
-app.use(express.json());
-const PORT = process.env.PORT || 4000;
-const JWT_SECRET = process.env.JWT_SECRET || "your-very-secret-key";
-const JWT_EXPIRES_IN = 5 * 60; // 5 minutes (in seconds)
 
+// --- CORS setup for production ---
 app.use(
   cors({
     origin: [
-      "https://localhost:9443",
-      "https://localhost:4000",
-      "http://localhost:19006",
-      "http://localhost:8081",
-      "http://localhost:4000",
-      "http://192.168.29.102:4000",
-      "http://192.168.29.102:8081",
+      "https://goldshopmanager.onrender.com", // Render backend
+      "http://localhost:19006", // Expo local dev
+      "http://localhost:8081", // Expo local dev
+      "https://<your-frontend-gh-pages-url>", // <-- Replace with your actual Expo web deploy URL
     ],
     credentials: true,
   })
@@ -526,16 +519,17 @@ app.post("/api/upload-invoice-pdf", async (req, res) => {
   }
 });
 
-// --- HTTPS server setup ---
-const certPath = path.join(__dirname, "certs", "server.cert");
-const keyPath = path.join(__dirname, "certs", "server.key");
-const server = https.createServer(
-  {
-    cert: fs.readFileSync(certPath),
-    key: fs.readFileSync(keyPath),
-  },
-  app
-);
+// --- HTTP server setup ---
+// const certPath = path.join(__dirname, "certs", "server.cert");
+// const keyPath = path.join(__dirname, "certs", "server.key");
+// const server = https.createServer(
+//   {
+//     cert: fs.readFileSync(certPath),
+//     key: fs.readFileSync(keyPath),
+//   },
+//   app
+// );
+const server = http.createServer(app);
 
 // --- In-memory session store and sessionId generator ---
 const sessionStore = {};
@@ -1011,5 +1005,7 @@ setInterval(() => {
 }, 10000); // Check every 10 seconds
 
 server.listen(PORT, () => {
-  console.log(`HTTPS & WebSocket server running on https://localhost:${PORT}`);
+  console.log(
+    `Server running on http://localhost:${PORT} or your Render public URL`
+  );
 });
