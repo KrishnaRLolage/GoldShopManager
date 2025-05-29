@@ -1,4 +1,7 @@
-// BackendServer/index.js
+// --- JWT secret and expiry config (must be at the top before any usage) ---
+const JWT_SECRET =
+  process.env.JWT_SECRET || "u7!$2kLz9@#1pQwX8#@4fdS4!^&bR3sT0zV6mN4c";
+const JWT_EXPIRES_IN = 5 * 60; // 5 minutes (in seconds)
 const express = require("express");
 const cors = require("cors");
 const sqlite3 = require("sqlite3").verbose();
