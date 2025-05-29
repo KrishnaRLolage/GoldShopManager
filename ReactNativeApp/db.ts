@@ -1,12 +1,15 @@
 import { Platform } from 'react-native';
 import { useState } from 'react';
 
-const API_BASE = Platform.OS === 'web' ? 'https://localhost:4000/api' : 'https://192.168.29.102:4000/api';
+// Use Render URL for production
+const API_BASE = Platform.OS === 'web'
+  ? 'https://goldshopmanager.onrender.com/api'
+  : 'https://goldshopmanager.onrender.com/api';
 
 // --- WebSocket setup ---
 const WS_URL = Platform.OS === 'web'
-  ? 'wss://localhost:4000'
-  : 'wss://192.168.29.102:4000';
+  ? 'wss://goldshopmanager.onrender.com'
+  : 'wss://goldshopmanager.onrender.com';
 
 let ws: WebSocket | null = null;
 let wsReady: Promise<void> | null = null;
