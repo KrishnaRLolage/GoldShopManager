@@ -28,7 +28,6 @@ export default function LoginScreen({ navigation }: any) {
       }
     } catch (error: any) {
       setError(error.message || 'Login error. Please try again.');
-      console.error('Login error:', error);
     }
   };
 

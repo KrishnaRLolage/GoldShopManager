@@ -54,7 +54,7 @@ export default function InventoryScreen(props: any) {
         setInventoryList(mapped);
       }
     } catch (e) {
-      console.error('Failed to load inventory:', e);
+      // Removed: console.error('Failed to load inventory:', e);
     }
   };
 
@@ -136,7 +136,7 @@ export default function InventoryScreen(props: any) {
         setAddItem({ ItemName: '', Description: '', Quantity: '', WeightPerPiece: '', TotalWeight: '' });
         await loadInventory();
       } catch (e) {
-        console.error('Failed to add or update inventory item:', e);
+        // Removed: console.error('Failed to add or update inventory item:', e);
       }
     }, 0);
   };
@@ -148,7 +148,7 @@ export default function InventoryScreen(props: any) {
       await apiDeleteInventory(item.id);
       await loadInventory();
     } catch (e) {
-      console.error('Failed to delete inventory item:', e);
+      // Removed: console.error('Failed to delete inventory item:', e);
     }
   };
 
@@ -182,7 +182,7 @@ export default function InventoryScreen(props: any) {
       setEditRowData(null);
       await loadInventory();
     } catch (e) {
-      console.error('Failed to update inventory item:', e);
+      // Removed: console.error('Failed to update inventory item:', e);
     }
   };
 

@@ -54,7 +54,6 @@ function ensureWS() {
       try {
         const msg = JSON.parse(event.data);
         if (msg.action === 'sessionExpired') {
-          console.log('session expired callback');
           setSessionId(null); // Clear sessionId on session expiration
           sessionExpiredCallbacks.forEach(cb => cb());
           sessionExpiredCallbacks = [];
@@ -72,7 +71,6 @@ function ensureWS() {
 }
 
 function wsSend(action: string, payload: any = {}, tokenOverride?: string): Promise<any> {
-  console.log('wsSend => wsToken: ', wsToken, 'action:', action, 'payload:', payload);
   return ensureWS().then(() => {
     return new Promise((resolve, reject) => {
       const reqId = wsReqId++;
@@ -98,7 +96,6 @@ export async function apiLogin(username: string, password: string) {
   // Store sessionId if provided by backend
   const sessionId = resp.sessionId || (resp.data && resp.data.sessionId) || null;
   setSessionId(sessionId);
-  console.log('WebSocket login successful, token:', wsToken, 'sessionId:', sessionId);
   return resp;
 }
 
