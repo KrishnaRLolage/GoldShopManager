@@ -306,11 +306,23 @@ export default function InvoiceScreen(props: any) {
               </tr>`).join('')}
             </table>
           </div>
-          <table class="totals-table">
-            <tr><td class="label">Subtotal:</td><td class="value">₹${subtotal.toFixed(2)}</td></tr>
-            <tr><td class="label">Total Making Charges:</td><td class="value">₹${totalMaking.toFixed(2)}</td></tr>
-            <tr><td class="label">${goldSettings?.gst_rate || 0}% GST:</td><td class="value">₹${totalGST.toFixed(2)}</td></tr>
-            <tr><td class="label grand">Grand Total:</td><td class="value grand">₹${grandTotal.toFixed(2)}</td></tr>
+          <table class="totals-table" style="margin-left:auto; margin-right:0; width:340px; text-align:right;">
+            <tr>
+              <td class="label" style="text-align:left;">Subtotal:</td>
+              <td class="value">₹${subtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td class="label" style="text-align:left;">Total Making Charges:</td>
+              <td class="value">₹${totalMaking.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td class="label" style="text-align:left;">${goldSettings?.gst_rate || 0}% GST:</td>
+              <td class="value">₹${totalGST.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td class="label grand" style="text-align:left;">Grand Total:</td>
+              <td class="value grand">₹${grandTotal.toFixed(2)}</td>
+            </tr>
           </table>
           <div class="card">
             <div style="font-weight:bold; margin-bottom:4px; color:#222831;">Payment Details</div>
@@ -614,17 +626,21 @@ export default function InvoiceScreen(props: any) {
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
         <View style={{ minWidth: 220 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: '#222831' }}>₹{subtotal.toFixed(2)}</Text>
+            <Text style={{ color: '#888', fontSize: 16, fontWeight: 'bold' }}>Subtotal:</Text>
+            <Text style={{ color: '#222831', fontSize: 16, fontWeight: 'bold' }}>₹{subtotal.toFixed(2)}</Text>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: '#222831' }}>₹{totalMaking.toFixed(2)}</Text>
+            <Text style={{ color: '#888', fontSize: 16, fontWeight: 'bold' }}>Total Making Charges:</Text>
+            <Text style={{ color: '#222831', fontSize: 16, fontWeight: 'bold' }}>₹{totalMaking.toFixed(2)}</Text>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: '#222831' }}>₹{totalGST.toFixed(2)}</Text>
+            <Text style={{ color: '#888', fontSize: 16, fontWeight: 'bold' }}>{goldSettings?.gst_rate || 0}% GST:</Text>
+            <Text style={{ color: '#222831', fontSize: 16, fontWeight: 'bold' }}>₹{totalGST.toFixed(2)}</Text>
           </View>
           <Divider style={{ marginVertical: 4 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ fontWeight: 'bold', color: '#7c3aed' }}>₹{grandTotal.toFixed(2)}</Text>
+            <Text style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: 20 }}>Grand Total:</Text>
+            <Text style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: 20 }}>₹{grandTotal.toFixed(2)}</Text>
           </View>
         </View>
       </View>
