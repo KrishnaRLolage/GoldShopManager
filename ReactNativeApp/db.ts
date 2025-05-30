@@ -1,14 +1,14 @@
 import { Platform } from 'react-native';
 import { useState } from 'react';
 
-// Use Render URL for production
+// Use Render URL for production, localhost for local development
 const API_BASE = Platform.OS === 'web'
-  ? 'https://goldshopmanager.onrender.com/api'
+  ? (window.location.hostname === 'localhost' ? 'http://localhost:4000/api' : 'https://goldshopmanager.onrender.com/api')
   : 'https://goldshopmanager.onrender.com/api';
 
 // --- WebSocket setup ---
 const WS_URL = Platform.OS === 'web'
-  ? 'wss://goldshopmanager.onrender.com'
+  ? (window.location.hostname === 'localhost' ? 'ws://localhost:4000' : 'wss://goldshopmanager.onrender.com')
   : 'wss://goldshopmanager.onrender.com';
 
 let ws: WebSocket | null = null;

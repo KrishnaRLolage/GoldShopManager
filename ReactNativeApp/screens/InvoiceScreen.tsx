@@ -361,7 +361,7 @@ export default function InvoiceScreen(props: any) {
         total: grandTotal,
         items: items.map(i => ({
           inventory_id: i.inventory_id && !isNaN(Number(i.inventory_id)) ? Number(i.inventory_id) : 1, // ensure number, fallback to 1
-          quantity: parseFloat(i.weight) || 1,
+          quantity: 1,
           price: parseFloat(i.amount) || 0
         }))
       };

@@ -750,7 +750,38 @@ wss.on("connection", (ws) => {
             stmt.finalize((err) => {
               if (err)
                 return send({ action, status: "error", error: err.message });
-              send({ action, status: "success", data: { id: invoiceId } });
+              // --- Update inventory quantities ---
+              let updateCount = 0;
+              let updateError = null;
+              if (items.length === 0) {
+                send({ action, status: "success", data: { id: invoiceId } });
+                return;
+              }
+              items.forEach((item) => {
+                db.run(
+                  "UPDATE inventory SET Quantity = Quantity - ? WHERE id = ?",
+                  [item.quantity, item.inventory_id],
+                  function (err) {
+                    updateCount++;
+                    if (err && !updateError) updateError = err;
+                    if (updateCount === items.length) {
+                      if (updateError) {
+                        send({
+                          action,
+                          status: "error",
+                          error: updateError.message,
+                        });
+                      } else {
+                        send({
+                          action,
+                          status: "success",
+                          data: { id: invoiceId },
+                        });
+                      }
+                    }
+                  }
+                );
+              });
             });
           }
         );
@@ -1013,4 +1044,34 @@ server.listen(PORT, () => {
   console.log(
     `Server running on http://localhost:${PORT} or your Render public URL`
   );
+});
+
+// --- DEV ONLY: API to reset (empty and recreate) the database ---
+app.post("/api/dev/reset-db", (req, res) => {
+  // List of tables to drop
+  const tables = [
+    "users",
+    "inventory",
+    "customers",
+    "invoices",
+    "invoice_items",
+    "billing_history",
+    "invoice_pdfs",
+    "gold_settings",
+  ];
+  db.serialize(() => {
+    tables.forEach((table) => {
+      db.run(`DROP TABLE IF EXISTS ${table}`);
+    });
+    // Remove all files in invoice_pdfs directory
+    const pdfDir = path.join(__dirname, "invoice_pdfs");
+    if (fs.existsSync(pdfDir)) {
+      fs.readdirSync(pdfDir).forEach((file) => {
+        fs.unlinkSync(path.join(pdfDir, file));
+      });
+    }
+    // Recreate tables
+    createTables();
+    res.json({ success: true, message: "Database reset and recreated." });
+  });
 });
